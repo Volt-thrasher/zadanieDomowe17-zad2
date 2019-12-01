@@ -3,6 +3,7 @@ package pl.javastart.streamsexercise;
 import java.math.BigDecimal;
 import java.time.YearMonth;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -17,7 +18,7 @@ class PaymentService {
     }
 
     List<Payment> findPaymentsSortedByDateDesc() {
-        List<Payment> payments = paymentRepository.findAll();
+        List<Payment> payments = getPayments();
         List<Payment> paymentsSortedByDate = new ArrayList<>();
         payments.stream()
                 .sorted(new DateComparator())
@@ -26,7 +27,7 @@ class PaymentService {
     }
 
     List<Payment> findPaymentsForCurrentMonth() {
-        List<Payment> payments = paymentRepository.findAll();
+        List<Payment> payments = getPayments();
         List<Payment> paymentsCurrentMonth = new ArrayList<>();
         payments.stream()
                 .filter(payment -> payment.getPaymentDate().getYear()
@@ -38,7 +39,7 @@ class PaymentService {
     }
 
     List<Payment> findPaymentsForGivenMonth(YearMonth yearMonth) {
-        List<Payment> payments = paymentRepository.findAll();
+        List<Payment> payments = getPayments();
         List<Payment> paymentsGivenMonth = new ArrayList<>();
         payments.stream()
                 .filter(payment -> payment.getPaymentDate().getYear() == yearMonth.getYear())
@@ -47,32 +48,96 @@ class PaymentService {
         return paymentsGivenMonth;
     }
 
+
     List<Payment> findPaymentsForGivenLastDays(int days) {
-        throw new RuntimeException("Not implemented");
+        List<Payment> payments = getPayments();
+        List<Payment> paymentsForGivenDays = new ArrayList<>();
+        payments.stream()
+                .filter(payment -> payment.getPaymentDate().getYear() == dateTimeProvider.yearMonthNow().getYear())
+                .filter(payment -> dateTimeProvider.zonedDateTimeNow().getDayOfYear()
+                        - payment.getPaymentDate().getDayOfYear() <= days)
+                .filter(payment -> payment.getPaymentDate().getDayOfYear() -
+                        dateTimeProvider.zonedDateTimeNow().getDayOfYear() <= 0)
+                .forEach(paymentsForGivenDays::add);
+        return paymentsForGivenDays;
     }
 
     Set<Payment> findPaymentsWithOnePaymentItem() {
-        throw new RuntimeException("Not implemented");
+        List<Payment> payments = getPayments();
+        Set<Payment> paymentsWithOneItem = new HashSet<>();
+        payments.stream()
+                .filter(payment -> payment.getPaymentItems().size() == 1)
+                .forEach(paymentsWithOneItem::add);
+        return paymentsWithOneItem;
     }
 
     Set<String> findProductsSoldInCurrentMonth() {
-        throw new RuntimeException("Not implemented");
+        Set<String> products = new HashSet<>();
+        findPaymentsForCurrentMonth().stream()
+                .map(payment -> payment.getPaymentItems())
+                .forEach(paymentItems -> paymentItems.stream()
+                        .forEach(paymentItem -> products.add(paymentItem.getName())));
+        return products;
     }
 
     BigDecimal sumTotalForGivenMonth(YearMonth yearMonth) {
-        throw new RuntimeException("Not implemented");
+        Set<BigDecimal> prices = new HashSet<>();
+        int sum = 0;
+        findPaymentsForGivenMonth(yearMonth).stream()
+                .map(payment -> payment.getPaymentItems())
+                .forEach(paymentItems -> paymentItems.stream()
+                        .forEach(paymentItem -> prices.add(paymentItem.getFinalPrice())));
+        for (BigDecimal price : prices) {
+            sum += price.intValue();
+        }
+        return new BigDecimal(sum);
     }
 
     BigDecimal sumDiscountForGivenMonth(YearMonth yearMonth) {
-        throw new RuntimeException("Not implemented");
+        List<BigDecimal> prices = new ArrayList<>();
+        int sum = 0;
+        findPaymentsForGivenMonth(yearMonth).stream()
+                .map(payment -> payment.getPaymentItems())
+                .forEach(paymentItems -> paymentItems.stream()
+                        .forEach(paymentItem -> prices.add(paymentItem.getRegularPrice())));
+        for (BigDecimal price : prices) {
+            sum += price.intValue();
+        }
+        sum = sum - sumTotalForGivenMonth(yearMonth).intValue();
+        return new BigDecimal(sum);
     }
 
     List<PaymentItem> getPaymentsForUserWithEmail(String userEmail) {
-        throw new RuntimeException("Not implemented");
+        List<Payment> payments = getPayments();
+        List<PaymentItem> items = new ArrayList<>();
+        payments.stream()
+                .filter(payment -> payment.getUser().getEmail().equals(userEmail))
+                .forEach(payment -> payment.getPaymentItems().stream()
+                        .forEach(paymentItem -> items.add(paymentItem)));
+        return items;
     }
 
     Set<Payment> findPaymentsWithValueOver(int value) {
-        throw new RuntimeException("Not implemented");
+        Set<Payment> paymentsOverValue = new HashSet<>();
+        List<Payment> payments = getPayments();
+        payments.stream()
+                .filter(payment -> getPaymentValue(payment) > value)
+                .forEach(payment -> paymentsOverValue.add(payment));
+        return paymentsOverValue;
     }
 
+    private List<Payment> getPayments() {
+        return paymentRepository.findAll();
+    }
+
+    private int getPaymentValue(Payment payment) {
+        int value = 0;
+        List<PaymentItem> items = new ArrayList<>();
+        payment.getPaymentItems().stream()
+                .forEach(paymentItem -> items.add(paymentItem));
+        for (PaymentItem item : items) {
+            value += item.getFinalPrice().intValue();
+        }
+        return value;
+    }
 }
